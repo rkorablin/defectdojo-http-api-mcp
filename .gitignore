@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Local / env
+.env
+.env.local
+*.log
+
+# Local tooling, do not commit
+.cursor/
+.junie/
+
+# Slash-команды агента — в git (регламент /session-start)
+!.cursor/
+!.cursor/commands/
+!.cursor/commands/**
