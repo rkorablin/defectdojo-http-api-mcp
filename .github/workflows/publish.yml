@@ -29,7 +29,6 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-          package-manager-cache: false
 
       # Trusted publishing needs npm >= 11.5.1 (OIDC).
       - name: Upgrade npm
@@ -41,5 +40,12 @@ jobs:
       - name: Test
         run: npm test
 
+      # Skip if this version is already on the registry (e.g. manual publish).
       - name: Publish
-        run: npm publish --access public
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          if npm view "defectdojo-http-api-mcp@${ver}" version >/dev/null 2>&1; then
+            echo "Version ${ver} already on npm — skip publish (trusted publisher may still need an OIDC publish of a new version)."
+            exit 0
+          fi
+          npm publish --access public

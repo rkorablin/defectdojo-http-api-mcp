@@ -64,7 +64,7 @@ function ok(data) {
 }
 
 const server = new Server(
-  { name: 'defectdojo-http-api-mcp', version: '0.1.0' },
+  { name: 'defectdojo-http-api-mcp', version: '0.1.1' },
   { capabilities: { tools: {} } }
 );
 

@@ -8,10 +8,10 @@
 
 ## Текущее состояние registry
 
-После первого stage через браузер на npm часто появляется только placeholder:
-
-- `0.0.0-stage` в `dist-tags.latest`
-- реальный `0.1.0` появляется **после** approve staged package **или** прямого `npm publish` через trusted publisher
+`0.1.0` уже на npm (ручная публикация / approve в браузере).  
+Trusted Publisher со статусом **Pending validation** подтверждается только
+**успешным publish из GitHub Actions (OIDC)** — ручной publish не засчитывается.
+Для валидации нужен следующий патч (например `0.1.1`) через тег `v*`.
 
 Проверка: `npm view defectdojo-http-api-mcp version`
 

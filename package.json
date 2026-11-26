@@ -1,6 +1,6 @@
 {
   "name": "defectdojo-http-api-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for DefectDojo over HTTP API (findings triage)",
   "type": "module",
   "main": "server.mjs",
