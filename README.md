@@ -120,6 +120,12 @@ npm test
 - GitLab (origin, экосистема **~/ai/**): **https://gitlab.greenworm.ru/ai/defectdojo-http-api-mcp**
 - GitHub (зеркало): **https://github.com/rkorablin/defectdojo-http-api-mcp**
 
+## npm publish (без TOTP каждый раз)
+
+Релизы — через **Trusted Publishing** (OIDC) и workflow
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml): тег `v*` на GitHub.
+Одноразовая настройка и детали: [`docs/npm-trusted-publishing.md`](docs/npm-trusted-publishing.md).
+
 ## License
 
 MIT

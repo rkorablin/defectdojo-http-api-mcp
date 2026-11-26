@@ -1,0 +1,45 @@
+# Publish to npm via Trusted Publishing (OIDC) — no long-lived npm token.
+# One-time setup on npmjs.com → package → Settings → Trusted Publisher:
+#   Organization/user: rkorablin
+#   Repository:        defectdojo-http-api-mcp
+#   Workflow filename: publish.yml
+#   Allowed actions:   enable "npm publish" (and optionally stage publish)
+#
+# First successful publish must happen within 2 days of creating the trust config.
+# Trigger: git tag v0.1.0 && git push github v0.1.0
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      # Trusted publishing needs npm >= 11.5.1 (OIDC).
+      - name: Upgrade npm
+        run: npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Publish
+        run: npm publish --access public
