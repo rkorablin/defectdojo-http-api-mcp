@@ -9,6 +9,7 @@
   },
   "files": [
     "server.mjs",
+    "lib",
     "README.md",
     "LICENSE",
     "ONBOARDING_PROMPT.md"
@@ -19,7 +20,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.greenworm.ru/ai/defectdojo-http-api-mcp.git"
+    "url": "git+https://github.com/rkorablin/defectdojo-http-api-mcp.git"
   },
   "keywords": [
     "mcp",
@@ -33,6 +34,8 @@
     "@modelcontextprotocol/sdk": "^1.27.1"
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "publish:npm": "npm publish --access public"
   }
 }

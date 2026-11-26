@@ -5,14 +5,22 @@
  * Env:
  * - DEFECTDOJO_URL          (e.g. http://defectdojo.example.com)
  * - DEFECTDOJO_API_TOKEN    (Token auth)
- * - DEFECTDOJO_ORGANIZATION (optional)
+ * - DEFECTDOJO_ORGANIZATION (optional default product_type name filter)
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  buildQuery,
+  buildFindingNoteBody,
+  summarizeFinding,
+  summarizeProduct,
+  mapResults
+} from './lib/defectdojo-helpers.mjs';
 
 const baseUrl = (process.env.DEFECTDOJO_URL || '').replace(/\/$/, '');
 const token = process.env.DEFECTDOJO_API_TOKEN || '';
+const defaultOrg = process.env.DEFECTDOJO_ORGANIZATION || '';
 
 function authHeaders() {
   if (!baseUrl) throw new Error('DEFECTDOJO_URL is required');
@@ -48,16 +56,6 @@ async function ddFetch(path, opts = {}) {
   return parseBody(text);
 }
 
-function qs(params = {}) {
-  const u = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null || v === '') continue;
-    u.set(k, String(v));
-  }
-  const s = u.toString();
-  return s ? `?${s}` : '';
-}
-
 function ok(data) {
   return {
     content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
@@ -73,18 +71,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'defectdojo_whoami',
-      description: 'Smoke: current DefectDojo user for the API token',
+      description:
+        'Smoke auth against DefectDojo. Uses /users/me when allowed; CI tokens often get a products-count fallback instead.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false }
     },
     {
       name: 'defectdojo_list_products',
-      description: 'List DefectDojo products',
+      description: 'List DefectDojo products (compact). Optional name / product_type filters.',
       inputSchema: {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Optional name contains filter' },
+          prod_type: {
+            type: 'number',
+            description: 'Product type id (organization). Overrides name lookup.'
+          },
+          organization: {
+            type: 'string',
+            description:
+              'Product type name (e.g. Cubekit). Defaults to DEFECTDOJO_ORGANIZATION when set.'
+          },
           limit: { type: 'number', description: 'Page size (default 50)' },
-          offset: { type: 'number', description: 'Offset (default 0)' }
+          offset: { type: 'number', description: 'Offset (default 0)' },
+          raw: { type: 'boolean', description: 'Return full API objects' }
+        },
+        additionalProperties: false
+      }
+    },
+    {
+      name: 'defectdojo_list_product_types',
+      description: 'List product types (organizations in UI terms)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          limit: { type: 'number' },
+          offset: { type: 'number' }
         },
         additionalProperties: false
       }
@@ -118,7 +140,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'defectdojo_list_findings',
       description:
-        'List findings with common triage filters (severity, active, false_p, verified, duplicate, product)',
+        'List findings with triage filters (severity, active, false_p, verified, duplicate, product). Compact by default.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -129,15 +151,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           verified: { type: 'boolean' },
           false_p: { type: 'boolean' },
           duplicate: { type: 'boolean' },
+          risk_accepted: { type: 'boolean' },
+          is_mitigated: { type: 'boolean' },
           limit: { type: 'number' },
-          offset: { type: 'number' }
+          offset: { type: 'number' },
+          raw: { type: 'boolean', description: 'Return full API objects' }
         },
         additionalProperties: false
       }
     },
     {
       name: 'defectdojo_get_finding',
-      description: 'Get one finding by id',
+      description: 'Get one finding by id (full object)',
       inputSchema: {
         type: 'object',
         properties: { id: { type: 'number' } },
@@ -148,7 +173,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'defectdojo_update_finding',
       description:
-        'PATCH finding triage fields (active, verified, false_p, out_of_scope, risk_accepted, is_mitigated, severity, notes append via separate tool)',
+        'PATCH finding triage fields (active, verified, false_p, out_of_scope, risk_accepted, is_mitigated, severity). Notes via defectdojo_add_note.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -166,13 +191,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       }
     },
     {
+      name: 'defectdojo_list_notes',
+      description: 'List notes on a finding',
+      inputSchema: {
+        type: 'object',
+        properties: { finding_id: { type: 'number' } },
+        required: ['finding_id'],
+        additionalProperties: false
+      }
+    },
+    {
       name: 'defectdojo_add_note',
-      description: 'Add a note to a finding',
+      description: 'Add a note to a finding (POST /findings/{id}/notes/)',
       inputSchema: {
         type: 'object',
         properties: {
           finding_id: { type: 'number' },
-          entry: { type: 'string', description: 'Note text' }
+          entry: { type: 'string', description: 'Note text' },
+          private: { type: 'boolean' },
+          note_type: { type: 'number', description: 'Optional note type id' }
         },
         required: ['finding_id', 'entry'],
         additionalProperties: false
@@ -181,19 +218,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ]
 }));
 
+async function resolveProdTypeId({ prod_type, organization }) {
+  if (prod_type != null) return prod_type;
+  const orgName = (organization || defaultOrg || '').trim();
+  if (!orgName) return undefined;
+  const data = await ddFetch(
+    `/product_types/${buildQuery({ name: orgName, limit: 20, offset: 0 })}`
+  );
+  const exact = (data?.results || []).find(
+    (pt) => String(pt.name).toLowerCase() === orgName.toLowerCase()
+  );
+  const hit = exact || (data?.results || [])[0];
+  return hit?.id;
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const name = req.params.name;
   const a = req.params.arguments || {};
 
   try {
     switch (name) {
-      case 'defectdojo_whoami':
-        return ok(await ddFetch('/users/me/'));
+      case 'defectdojo_whoami': {
+        try {
+          return ok(await ddFetch('/users/me/'));
+        } catch (err) {
+          const products = await ddFetch(`/products/${buildQuery({ limit: 1, offset: 0 })}`);
+          return ok({
+            auth: 'ok',
+            users_me: 'unavailable',
+            detail: String(err?.message || err),
+            organization: defaultOrg || null,
+            base_url: baseUrl,
+            products_count: products?.count ?? null
+          });
+        }
+      }
 
-      case 'defectdojo_list_products':
+      case 'defectdojo_list_product_types':
         return ok(
           await ddFetch(
-            `/products/${qs({
+            `/product_types/${buildQuery({
               name: a.name,
               limit: a.limit ?? 50,
               offset: a.offset ?? 0
@@ -201,10 +265,26 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           )
         );
 
+      case 'defectdojo_list_products': {
+        const prodTypeId = await resolveProdTypeId({
+          prod_type: a.prod_type,
+          organization: a.organization
+        });
+        const data = await ddFetch(
+          `/products/${buildQuery({
+            name: a.name,
+            prod_type: prodTypeId,
+            limit: a.limit ?? 50,
+            offset: a.offset ?? 0
+          })}`
+        );
+        return ok(a.raw ? data : mapResults(data, summarizeProduct));
+      }
+
       case 'defectdojo_list_engagements':
         return ok(
           await ddFetch(
-            `/engagements/${qs({
+            `/engagements/${buildQuery({
               product: a.product_id,
               limit: a.limit ?? 50,
               offset: a.offset ?? 0
@@ -215,7 +295,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       case 'defectdojo_list_tests':
         return ok(
           await ddFetch(
-            `/tests/${qs({
+            `/tests/${buildQuery({
               engagement: a.engagement_id,
               limit: a.limit ?? 50,
               offset: a.offset ?? 0
@@ -223,22 +303,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           )
         );
 
-      case 'defectdojo_list_findings':
-        return ok(
-          await ddFetch(
-            `/findings/${qs({
-              product: a.product_id,
-              test: a.test_id,
-              severity: a.severity,
-              active: a.active,
-              verified: a.verified,
-              false_p: a.false_p,
-              duplicate: a.duplicate,
-              limit: a.limit ?? 50,
-              offset: a.offset ?? 0
-            })}`
-          )
+      case 'defectdojo_list_findings': {
+        const data = await ddFetch(
+          `/findings/${buildQuery({
+            product: a.product_id,
+            test: a.test_id,
+            severity: a.severity,
+            active: a.active,
+            verified: a.verified,
+            false_p: a.false_p,
+            duplicate: a.duplicate,
+            risk_accepted: a.risk_accepted,
+            is_mitigated: a.is_mitigated,
+            limit: a.limit ?? 50,
+            offset: a.offset ?? 0
+          })}`
         );
+        return ok(a.raw ? data : mapResults(data, summarizeFinding));
+      }
 
       case 'defectdojo_get_finding':
         return ok(await ddFetch(`/findings/${a.id}/`));
@@ -264,16 +346,20 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         );
       }
 
+      case 'defectdojo_list_notes':
+        return ok(await ddFetch(`/findings/${a.finding_id}/notes/`));
+
       case 'defectdojo_add_note':
         return ok(
-          await ddFetch('/notes/', {
+          await ddFetch(`/findings/${a.finding_id}/notes/`, {
             method: 'POST',
-            body: JSON.stringify({
-              entry: a.entry,
-              object_id: a.finding_id,
-              // Finding content type is typically resolved by DD; if needed adjust per instance
-              type: 'Finding'
-            })
+            body: JSON.stringify(
+              buildFindingNoteBody({
+                entry: a.entry,
+                private: a.private,
+                note_type: a.note_type
+              })
+            )
           })
         );
 

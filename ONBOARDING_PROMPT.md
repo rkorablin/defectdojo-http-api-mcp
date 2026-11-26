@@ -19,14 +19,19 @@
 - Воркспейс: `~/ai/general/ai.code-workspace`
 - `.cursor/mcp.json` → симлинк на `../../general/.cursor/mcp.json`
 - `.cursor/rules/` → симлинки на `../general/.cursor/rules/*.mdc`
+- Секреты хоста: `~/.config/ai-mcp/it-aces.env` + `bin/run-defectdojo-mcp-itaces.sh`
 
 ## Текущий этап
 
-Scaffold: `server.mjs` с MVP tools, README, `/session-start`, git на
-`gitlab.greenworm.ru:ai/defectdojo-http-api-mcp`.
+MVP готов к использованию: tools + helpers + unit tests, wrapper в `ai-mcp`,
+запись в `general/.cursor/mcp.json`. Smoke — против инстанса через env.
 
-**Следующее (отдельная сессия разработки):** довести API-обёртки, тесты,
-npm publish, wrapper под секретный env, подключение в нужные MCP-конфиги хоста.
+**Git:** `origin` → `git@gitlab.greenworm.ru:ai/defectdojo-http-api-mcp.git`
+(группа **ai**). Публичное зеркало: remote `github` →
+`git@github.com:rkorablin/defectdojo-http-api-mcp.git`.
+
+**CI-токен:** `/users/me` часто 403 — `defectdojo_whoami` умеет fallback.
+Заметки — только через `/findings/{id}/notes/`.
 
 ## Не смешивать
 

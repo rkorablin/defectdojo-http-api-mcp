@@ -13,18 +13,32 @@ MCP (Model Context Protocol) server for **DefectDojo** over the official HTTP AP
 
 ## Install
 
+### From source (GitLab / GitHub)
+
 ```bash
-cd ~/ai/defectdojo-http-api-mcp
+git clone git@gitlab.greenworm.ru:ai/defectdojo-http-api-mcp.git
+cd defectdojo-http-api-mcp
 npm install
+```
+
+Публичное зеркало: `https://github.com/rkorablin/defectdojo-http-api-mcp`.
+
+### From npm
+
+```bash
+npm install defectdojo-http-api-mcp
+# or
+npm install -g defectdojo-http-api-mcp
 ```
 
 ## Configuration
 
-Environment variables:
-
-- `DEFECTDOJO_URL` — base URL without trailing slash (e.g. `http://defectdojo.example.com`)
-- `DEFECTDOJO_API_TOKEN` — API token (`Token` auth)
-- `DEFECTDOJO_ORGANIZATION` — optional default product type / org label for filters
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DEFECTDOJO_URL` | Yes | Base URL without trailing slash |
+| `DEFECTDOJO_API_TOKEN` | Yes | API token (`Authorization: Token …`) |
+| `DEFECTDOJO_ORGANIZATION` | No | Default product type name filter (e.g. `Cubekit`) |
+| `DEFECTDOJO_ENGAGEMENT` | No | Optional label for docs / host wrappers |
 
 ## Usage
 
@@ -38,7 +52,7 @@ node server.mjs
 
 ### Cursor / MCP host
 
-Local clone:
+#### Option 1: Local clone
 
 ```json
 "defectdojo": {
@@ -51,23 +65,61 @@ Local clone:
 }
 ```
 
-Or via a wrapper that sources your secret env file (preferred for multi-host setups).
+#### Option 2: npm / npx
 
-## Tools (MVP scaffold)
+```json
+"defectdojo": {
+  "command": "npx",
+  "args": ["--yes", "--prefer-online", "defectdojo-http-api-mcp@latest"],
+  "env": {
+    "DEFECTDOJO_URL": "http://defectdojo.example.com",
+    "DEFECTDOJO_API_TOKEN": "…"
+  }
+}
+```
+
+#### Option 3: wrapper + secrets (recommended)
+
+See `~/.config/ai-mcp` pattern (GitLab / YouTrack / Confluence):
+
+- secrets in `~/.config/ai-mcp/it-aces.env` (`DEFECTDOJO_*`)
+- launcher `~/.config/ai-mcp/bin/run-defectdojo-mcp-itaces.sh`
+- entry in `~/ai/general/.cursor/mcp.json`
+
+## Tools
 
 | Tool | Purpose |
 |------|---------|
-| `defectdojo_whoami` | Current user / token smoke |
-| `defectdojo_list_products` | Products |
-| `defectdojo_list_engagements` | Engagements (optional product filter) |
+| `defectdojo_whoami` | Auth smoke (`/users/me` or products-count fallback for CI tokens) |
+| `defectdojo_list_product_types` | Organizations / product types |
+| `defectdojo_list_products` | Products (optional org / name filter) |
+| `defectdojo_list_engagements` | Engagements |
 | `defectdojo_list_tests` | Tests under engagement |
-| `defectdojo_list_findings` | Findings with severity/active/false_p filters |
+| `defectdojo_list_findings` | Findings with triage filters (compact by default) |
 | `defectdojo_get_finding` | One finding by id |
-| `defectdojo_update_finding` | Status / verified / false_p / risk accepted / notes |
-| `defectdojo_add_note` | Note on finding |
+| `defectdojo_update_finding` | PATCH status / false_p / risk_accepted / … |
+| `defectdojo_list_notes` | Notes on a finding |
+| `defectdojo_add_note` | Note via `POST /findings/{id}/notes/` |
 
-Expand incrementally; keep schemas explicit.
+## Typical agent workflow
 
-## GitLab
+1. `defectdojo_whoami` — check token
+2. `defectdojo_list_products` with organization — inventory
+3. `defectdojo_list_findings` (`active=true`, severity filters)
+4. `defectdojo_get_finding` — details
+5. `defectdojo_update_finding` / `defectdojo_add_note` — triage
 
-Репозиторий экосистемы **~/ai/**: **https://gitlab.greenworm.ru/ai/defectdojo-http-api-mcp**.
+## Tests
+
+```bash
+npm test
+```
+
+## Remotes
+
+- GitLab (origin, экосистема **~/ai/**): **https://gitlab.greenworm.ru/ai/defectdojo-http-api-mcp**
+- GitHub (зеркало): **https://github.com/rkorablin/defectdojo-http-api-mcp**
+
+## License
+
+MIT
