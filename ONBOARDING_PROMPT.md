@@ -30,7 +30,9 @@ MVP готов к использованию: tools + helpers + unit tests, wrap
 (группа **ai**). Публичное зеркало: remote `github` →
 `git@github.com:rkorablin/defectdojo-http-api-mcp.git`.
 
-**CI-токен:** `/users/me` часто 403 — `defectdojo_whoami` умеет fallback.
+**Identity:** `defectdojo_whoami` — `/user_profile/` → `/users/me/` →
+products-count fallback. На it-aces личный токен: `/users/me` = 404 (норма),
+profile отдаёт username. См. [`TODO-whoami-user-profile.md`](TODO-whoami-user-profile.md).
 Заметки — только через `/findings/{id}/notes/`.
 
 ## Не смешивать

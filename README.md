@@ -90,7 +90,7 @@ See `~/.config/ai-mcp` pattern (GitLab / YouTrack / Confluence):
 
 | Tool | Purpose |
 |------|---------|
-| `defectdojo_whoami` | Auth smoke (`/users/me` or products-count fallback for CI tokens) |
+| `defectdojo_whoami` | Identity smoke: `/user_profile/` → `/users/me/` → products-count fallback |
 | `defectdojo_list_product_types` | Organizations / product types |
 | `defectdojo_list_products` | Products (optional org / name filter) |
 | `defectdojo_list_engagements` | Engagements |

@@ -15,7 +15,8 @@ import {
   buildFindingNoteBody,
   summarizeFinding,
   summarizeProduct,
-  mapResults
+  mapResults,
+  resolveWhoamiIdentity
 } from './lib/defectdojo-helpers.mjs';
 
 const baseUrl = (process.env.DEFECTDOJO_URL || '').replace(/\/$/, '');
@@ -72,7 +73,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'defectdojo_whoami',
       description:
-        'Smoke auth against DefectDojo. Uses /users/me when allowed; CI tokens often get a products-count fallback instead.',
+        'Identity smoke: prefers GET /user_profile/ (username), then /users/me/, else products-count fallback for CI/service tokens. 404 on /users/me/ is normal on some DD builds.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false }
     },
     {
@@ -238,21 +239,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   try {
     switch (name) {
-      case 'defectdojo_whoami': {
-        try {
-          return ok(await ddFetch('/users/me/'));
-        } catch (err) {
-          const products = await ddFetch(`/products/${buildQuery({ limit: 1, offset: 0 })}`);
-          return ok({
-            auth: 'ok',
-            users_me: 'unavailable',
-            detail: String(err?.message || err),
+      case 'defectdojo_whoami':
+        return ok(
+          await resolveWhoamiIdentity((path) => ddFetch(path), {
             organization: defaultOrg || null,
-            base_url: baseUrl,
-            products_count: products?.count ?? null
-          });
-        }
-      }
+            base_url: baseUrl
+          })
+        );
 
       case 'defectdojo_list_product_types':
         return ok(
